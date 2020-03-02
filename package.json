@@ -2,12 +2,8 @@
 	"name": "quickjs-debug",
 	"displayName": "QuickJS Debugger",
 	"version": "0.0.13",
-	"publisher": "koush",
+	"publisher": "stuartwang",
 	"description": "Debug the QuickJS runtime.",
-	"author": {
-		"name": "Koushik Dutta",
-		"email": "koushd@gmail.com"
-	},
 	"license": "MIT",
 	"keywords": [
 		"multi-root ready"
@@ -60,7 +56,10 @@
 	"contributes": {
 		"breakpoints": [
 			{
-				"language": "markdown"
+				"language": "html"
+			},
+			{
+				"language": "javascript"
 			}
 		],
 		"debuggers": [
@@ -197,33 +196,9 @@
 				"initialConfigurations": [
 					{
 						"type": "quickjs",
-						"request": "launch",
-						"name": "Launch QuickJS",
-						"runtimeExecutable": "/path/to/qjs",
-						"program": "^\"${workspaceFolder}/main.js\""
-					}
-				],
-				"configurationSnippets": [
-					{
-						"label": "QuickJS Debug: Launch",
-						"description": "A new configuration for launching and debugging a JavaScript file in QuickJS.",
-						"body": {
-							"type": "quickjs",
-							"request": "launch",
-							"name": "Launch QuickJS",
-							"runtimeExecutable": "/path/to/qjs",
-							"program": "^\"\\${workspaceFolder}/main.js\""
-						}
-					},
-					{
-						"label": "QuickJS Debug: Attach",
-						"description": "A new configuration for launching and waiting fpr QuickJS to attach.",
-						"body": {
-							"type": "quickjs",
-							"request": "launch",
-							"name": "Attach QuickJS",
-							"localRoot": "^\"\\${workspaceFolder}/\""
-						}
+						"request": "attach",
+						"name": "Attach QJS",
+						"port": 8808
 					}
 				]
 			}
