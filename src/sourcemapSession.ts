@@ -19,16 +19,16 @@ export abstract class SourcemapSession extends LoggingDebugSession {
 		if (this._sourceMapsLoading)
 			return await this._sourceMapsLoading;
 
-		var sourceMaps = Object.keys(commonArgs.sourceMaps || {}) || [];
+		let sourceMaps = Object.keys(commonArgs.sourceMaps || {}) || [];
 
-		var promises = sourceMaps.map(sourcemap => (async () => {
+		let promises = sourceMaps.map(sourcemap => (async () => {
 			try {
 				let json = JSON.parse(fs.readFileSync(sourcemap).toString());
-				var smc = await new SourceMapConsumer(json);
+				let smc = await new SourceMapConsumer(json);
 				this._sourceMaps.set(smc, sourcemap);
-				var sourceMapRoot = path.dirname(sourcemap);
-				var sources = smc.sources.map(source => path.join(sourceMapRoot, source) as string);
-				for (var source of sources) {
+				let sourceMapRoot = path.dirname(sourcemap);
+				let sources = smc.sources.map(source => path.join(sourceMapRoot, source) as string);
+				for (let source of sources) {
 					const other = this._fileToSourceMap.get(source);
 					if (other) {
 						this.logTrace(`sourcemap for ${source} found in ${other.file}.map and ${sourcemap}`);
@@ -111,7 +111,7 @@ export abstract class SourcemapSession extends LoggingDebugSession {
 			this.logTrace(`translateFileLocationToRemote: ${JSON.stringify(sourceLocation)} to: ${JSON.stringify(actualSourceLocation)}`);
 			// convert the local absolute path into a sourcemap relative path.
 			actualSourceLocation.source = path.relative(path.dirname(sourcemap), sourceLocation.source);
-			var unmappedPosition: NullablePosition = sm.generatedPositionFor(actualSourceLocation);
+			let unmappedPosition: NullablePosition = sm.generatedPositionFor(actualSourceLocation);
 			if (!unmappedPosition.line == null)
 				throw new Error('map failed');
 			// now given a source mapped relative path, translate that into a remote path.
@@ -127,7 +127,7 @@ export abstract class SourcemapSession extends LoggingDebugSession {
 		}
 		catch (e) {
 			// local files need to be resolved to remote files.
-			var ret = Object.assign({}, sourceLocation);
+			let ret = Object.assign({}, sourceLocation);
 			ret.source = await this.getRemoteAbsolutePath(await this.getLocalRelativePath(sourceLocation.source));
 			return ret;
 		}
@@ -138,7 +138,7 @@ export abstract class SourcemapSession extends LoggingDebugSession {
 		const commonArgs = await this.getArguments();
 
 		try {
-			for (var sm of this._sourceMaps.keys()) {
+			for (let sm of this._sourceMaps.keys()) {
 				const smp = this._sourceMaps.get(sm);
 
 				// given a remote path, translate that into a source map relative path for lookup
@@ -167,7 +167,7 @@ export abstract class SourcemapSession extends LoggingDebugSession {
 		}
 		catch (e) {
 			// remote files need to be resolved to local files.
-			var ret = Object.assign({}, sourceLocation);
+			let ret = Object.assign({}, sourceLocation);
 			ret.source = await this.getLocalAbsolutePath(await this.getRemoteRelativePath(sourceLocation.source));
 			return ret;
 		}

@@ -1,4 +1,4 @@
-import * as CP from 'child_process';
+// import * as CP from 'child_process';
 import { AddressInfo, createConnection, Server, Socket } from 'net';
 import { basename } from 'path';
 import { MappedPosition } from 'source-map';
@@ -12,16 +12,17 @@ const Transform = require('stream').Transform;
 const { Subject } = require('await-notify');
 
 interface CommonArguments extends SourcemapArguments {
-	program: string;
+	program: string;  		// 要运行的 js 文件
 	args?: string[];
-	cwd?: string;
-	runtimeExecutable: string;
-	mode: string;
-	address: string;
+	cwd?: string;	  		// file root path
+	runtimeExecutable: string;  // quick js file
+	mode: string;			// connect / other
+	address: string;		//server address
 	port: number;
 	console?: ConsoleType;
-	trace?: boolean;
+	trace?: boolean; 		// trace log?
 }
+
 interface LaunchRequestArguments extends CommonArguments, DebugProtocol.LaunchRequestArguments {
 }
 interface AttachRequestArguments extends CommonArguments, DebugProtocol.AttachRequestArguments {
@@ -39,13 +40,13 @@ class MessageParser extends Transform {
 	}
 
 	private onLength(buffer: Buffer) {
-		var length = parseInt(buffer.toString(), 16);
+		let length = parseInt(buffer.toString(), 16);
 		this.emit('length', length);
 		this._bytes(length, this.onMessage);
 	}
 
 	private onMessage(buffer: Buffer) {
-		var json = JSON.parse(buffer.toString());
+		let json = JSON.parse(buffer.toString());
 		this.emit('message', json);
 		this._bytes(9, this.onLength);
 	}
@@ -63,7 +64,7 @@ export class QuickJSDebugSession extends SourcemapSession {
 	private static RUNINTERMINAL_TIMEOUT = 5000;
 
 	private _server?: Server;
-	private _supportsRunInTerminalRequest = false;
+	private _supportsRunInTerminalRequest = false; //是否在console中运行目标js
 	private _console: ConsoleType = 'internalConsole';
 	private _isTerminated: boolean;
 	private _threads = new Map<number, Socket>();
@@ -87,33 +88,32 @@ export class QuickJSDebugSession extends SourcemapSession {
 
 	public constructor() {
 		super("quickjs-debug.txt");
-
 		this.setDebuggerLinesStartAt1(true);
 		this.setDebuggerColumnsStartAt1(true);
 	}
 
+	// 首个请求，作用是设置特性
 	protected initializeRequest(response: DebugProtocol.InitializeResponse, args: DebugProtocol.InitializeRequestArguments): void {
 
 		if (typeof args.supportsRunInTerminalRequest === 'boolean') {
 			this._supportsRunInTerminalRequest = args.supportsRunInTerminalRequest;
 		}
-
 		// build and return the capabilities of this debug adapter:
 		response.body = response.body || {};
-
 		// make VS Code to use 'evaluate' when hovering over source
-		response.body.supportsEvaluateForHovers = true;
+		response.body.supportsEvaluateForHovers = true; // 悬停请求变量
 		response.body.exceptionBreakpointFilters = [{
 			label: "All Exceptions",
 			filter: "exceptions",
 		}]
+		// make VS Code to support completion in REPL 在调试控制台REPL时使用自动补全
+		response.body.supportsCompletionsRequest = true;
+		response.body.completionTriggerCharacters = [ ".", "[" ];
+		response.body.supportsTerminateRequest = true;
+		// response.body.supportsConfigurationDoneRequest = true;
 
 		// make VS Code to support data breakpoints
 		// response.body.supportsDataBreakpoints = true;
-
-		// make VS Code to support completion in REPL
-		response.body.supportsCompletionsRequest = true;
-		response.body.completionTriggerCharacters = [ ".", "[" ];
 
 		// make VS Code to send cancelRequests
 		// response.body.supportsCancelRequest = true;
@@ -121,13 +121,8 @@ export class QuickJSDebugSession extends SourcemapSession {
 		// make VS Code send the breakpointLocations request
 		// response.body.supportsBreakpointLocationsRequest = true;
 
-		response.body.supportsConfigurationDoneRequest = true;
-
-		response.body.supportsTerminateRequest = true;
-
 		this.sendResponse(response);
-
-		this.sendEvent(new InitializedEvent());
+		// this.sendEvent(new InitializedEvent());
 	}
 
 	private handleEvent(thread: number, event: any) {
@@ -141,8 +136,8 @@ export class QuickJSDebugSession extends SourcemapSession {
 	}
 
 	private handleResponse(json: any) {
-		var request_seq: number = json.request_seq;
-		var pending = this._requests.get(request_seq);
+		let request_seq: number = json.request_seq;
+		let pending = this._requests.get(request_seq);
 		if (!pending) {
 			this.logTrace(`request not found: ${request_seq}`)
 			return;
@@ -176,7 +171,7 @@ export class QuickJSDebugSession extends SourcemapSession {
 	private onThreadDead(thread: number, reason: string) {
 		if (thread) {
 			thread = 0;
-			var socket = this._threads.get(thread);
+			let socket = this._threads.get(thread);
 			this._threads.delete(thread);
 			if (!this._server)
 				this._terminated(reason);
@@ -185,10 +180,10 @@ export class QuickJSDebugSession extends SourcemapSession {
 		}
 	}
 
-
+	// 消息处理回调
 	private onSocket(socket: Socket) {
-		var parser = new MessageParser();
-		var thread: number = 0;
+		let parser = new MessageParser();
+		let thread: number = 0; // 这个thread编号有什么用?
 		parser.on('message', json => {
 			this.logTrace(`received ${thread}: ${JSON.stringify(json)}`)
 			// the very first message must include the thread id.
@@ -227,21 +222,19 @@ export class QuickJSDebugSession extends SourcemapSession {
 	}
 
     protected async attachRequest(response: DebugProtocol.AttachResponse, args: AttachRequestArguments, request?: DebugProtocol.Request) {
+		// this._commonArgs = args;
+		// this._argsSubject.notify();
+		// this.beforeConnection({});
+		// this.afterConnection();
+		// this.sendResponse(response);
+
 		this._commonArgs = args;
-		this._argsSubject.notify();
-		this.beforeConnection({});
-		this.afterConnection();
-		this.sendResponse(response);
-	}
+		this._argsSubject.notify(); // 这里是一个异步通知，事件的作用不清楚
 
-	protected async launchRequest(response: DebugProtocol.LaunchResponse, args: LaunchRequestArguments) {
-		this._commonArgs = args;
-		this._argsSubject.notify();
+		// this._commonArgs.localRoot = args.localRoot;
+		// this.closeServer();
 
-		this._commonArgs.localRoot = args.localRoot;
-		this.closeServer();
-
-		var env = {};
+		let env = {};
 		try {
 			this.beforeConnection(env);
 		}
@@ -249,142 +242,165 @@ export class QuickJSDebugSession extends SourcemapSession {
 			this.sendErrorResponse(response, 17, e.message);
 			return;
 		}
-		var cwd = <string>args.cwd || path.dirname(args.program);
+		this.sendResponse(response);
+	}
 
-		if (typeof args.console === 'string') {
-			switch (args.console) {
-				case 'internalConsole':
-				case 'integratedTerminal':
-				case 'externalTerminal':
-					this._console = args.console;
-					break;
-				default:
-					this.sendErrorResponse(response, 2028, `Unknown console type '${args.console}'.`);
-					return;
-			}
-		}
+	protected async launchRequest(response: DebugProtocol.LaunchResponse, args: LaunchRequestArguments) {
+		// 变量赋值
+		// this._commonArgs = args;
+		// this._argsSubject.notify(); // 这里是一个异步通知，事件的作用不清楚
 
-		let qjsArgs = (args.args || []).slice();
-		qjsArgs.unshift(args.program);
+		// // this._commonArgs.localRoot = args.localRoot;
+		// // this.closeServer();
 
-		if (this._supportsRunInTerminalRequest && (this._console === 'externalTerminal' || this._console === 'integratedTerminal')) {
+		// let env = {};
+		// try {
+		// 	this.beforeConnection(env);
+		// }
+		// catch (e) {
+		// 	this.sendErrorResponse(response, 17, e.message);
+		// 	return;
+		// }
+		// let cwd = <string>args.cwd || path.dirname(args.program);
 
-			const termArgs: DebugProtocol.RunInTerminalRequestArguments = {
-				kind: this._console === 'integratedTerminal' ? 'integrated' : 'external',
-				title: "QuickJS Debug Console",
-				cwd,
-				args: qjsArgs,
-				env,
-			};
+		// console 参数暂时忽略掉
+		// if (typeof args.console === 'string') {
+		// 	switch (args.console) {
+		// 		case 'internalConsole':
+		// 		case 'integratedTerminal':
+		// 		case 'externalTerminal':
+		// 			this._console = args.console;
+		// 			break;
+		// 		default:
+		// 			this.sendErrorResponse(response, 2028, `Unknown console type '${args.console}'.`);
+		// 			return;
+		// 	}
+		// }
 
-			this.runInTerminalRequest(termArgs, QuickJSDebugSession.RUNINTERMINAL_TIMEOUT, runResponse => {
-				if (runResponse.success) {
-					// this._attach(response, args, port, address, timeout);
-				} else {
-					this.sendErrorResponse(response, 2011, `Cannot launch debug target in terminal (${runResponse.message}).`);
-					// this._terminated('terminal error: ' + runResponse.message);
-				}
-			});
-		} else {
-			const options: CP.SpawnOptions = {
-				cwd,
-				env,
-			};
+		// let qjsArgs = (args.args || []).slice();
+		// qjsArgs.unshift(args.program);
 
-			const nodeProcess = CP.spawn(args.runtimeExecutable, qjsArgs, options);
-			nodeProcess.on('error', (error) => {
-				// tslint:disable-next-line:no-bitwise
-				this.sendErrorResponse(response, 2017, `Cannot launch debug target (${error.message}).`);
-				this._terminated(`failed to launch target (${error})`);
-			});
-			nodeProcess.on('exit', () => {
-				this._terminated('target exited');
-			});
-			nodeProcess.on('close', (code) => {
-				this._terminated('target closed');
-			});
+		// if (this._supportsRunInTerminalRequest && (this._console === 'externalTerminal' || this._console === 'integratedTerminal')) {
 
-			this._captureOutput(nodeProcess);
-		}
+		// 	const termArgs: DebugProtocol.RunInTerminalRequestArguments = {
+		// 		kind: this._console === 'integratedTerminal' ? 'integrated' : 'external',
+		// 		title: "QuickJS Debug Console",
+		// 		cwd,
+		// 		args: qjsArgs,
+		// 		env,
+		// 	};
 
-		try {
-			this.afterConnection();
-		}
-		catch (e) {
-			this.sendErrorResponse(response, 18, e.message);
-			return;
-		}
+		// 	this.runInTerminalRequest(termArgs, QuickJSDebugSession.RUNINTERMINAL_TIMEOUT, runResponse => {
+		// 		if (runResponse.success) {
+		// 			// this._attach(response, args, port, address, timeout);
+		// 		} else {
+		// 			this.sendErrorResponse(response, 2011, `Cannot launch debug target in terminal (${runResponse.message}).`);
+		// 			// this._terminated('terminal error: ' + runResponse.message);
+		// 		}
+		// 	});
+		// } else {
+			// const options: CP.SpawnOptions = {
+			// 	cwd,
+			// 	env,
+			// };
+
+			// const nodeProcess = CP.spawn(args.runtimeExecutable, qjsArgs, options);
+			// nodeProcess.on('error', (error) => {
+			// 	// tslint:disable-next-line:no-bitwise
+			// 	this.sendErrorResponse(response, 2017, `Cannot launch debug target (${error.message}).`);
+			// 	this._terminated(`failed to launch target (${error})`);
+			// });
+			// nodeProcess.on('exit', () => {
+			// 	this._terminated('target exited');
+			// });
+			// nodeProcess.on('close', (code) => {
+			// 	this._terminated('target closed');
+			// });
+
+			// this._captureOutput(nodeProcess);
+		// }
+
+		// try {
+		// 	this.afterConnection();
+		// }
+		// catch (e) {
+		// 	this.sendErrorResponse(response, 18, e.message);
+		// 	return;
+		// }
 
 		this.sendResponse(response);
 	}
 
-
+	// 创建 server， listening
 	private beforeConnection(env: any) {
 		// make sure to 'Stop' the buffered logging if 'trace' is not set
 		logger.setup(this._commonArgs.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
 
 		const address = this._commonArgs.address || 'localhost';
-		if (this._commonArgs.mode == 'connect') {
+		if (this._commonArgs.mode == 'connect') {  // _commonArgs.mode 决定了VSCode插件是作为server还是client。默认作为server。可以暂时忽略
 			// connect to a quickjs runtime that is instructed to listen for a connection.
 			// typically connect should not be used with launching, because it
 			// needs to wait for quickjs to spin up and listen.
 			// connect should be used with attach.
 
+			// 暂时不考虑作为client的情况
 			if (!this._commonArgs.port)
 				throw new Error("Must specify a 'port' for 'connect'");
 			env['QUICKJS_DEBUG_LISTEN_ADDRESS'] = `${address}:${this._commonArgs.port}`;
+			// 通过env['QUICKJS_DEBUG_LISTEN_ADDRESS']本地换机功能传递，只能做本地调试！要改变方式
 		}
 		else {
 			this._server = new Server(this.onSocket.bind(this));
 			this._server.listen(this._commonArgs.port || 0);
-			var port = (<AddressInfo>this._server.address()).port;
+			let port = (<AddressInfo>this._server.address()).port;
 			this.log(`QuickJS Debug Port: ${port}`);
-
+			// 尝试使用环境传递 port , 也是一种可以尝试的方式
 			env['QUICKJS_DEBUG_ADDRESS'] = `localhost:${port}`;
 		}
 	}
 
+	// 完全是connect模式，可以忽略
 	private async afterConnection() {
-		if (this._commonArgs.mode == 'connect') {
+		// if (this._commonArgs.mode == 'connect') {
 
-			var socket;
-			for (var attempt = 0; attempt < 10; attempt++) {
-				try {
-					socket = await new Promise<Socket>((resolve, reject) => {
-						var socket = createConnection(this._commonArgs.port, this._commonArgs.address);
-						socket.on('connect', () => {
-							socket.removeAllListeners();
-							resolve(socket)
-						});
+		// 	let socket;
+		// 	for (let attempt = 0; attempt < 10; attempt++) {
+		// 		try {
+		// 			socket = await new Promise<Socket>((resolve, reject) => {
+		// 				let socket = createConnection(this._commonArgs.port, this._commonArgs.address);
+		// 				socket.on('connect', () => {
+		// 					socket.removeAllListeners();
+		// 					resolve(socket)
+		// 				});
 
-						socket.on('close', reject);
-						socket.on('error', reject);
-					});
-					break;
-				}
-				catch (e) {
-					await new Promise(resolve => setTimeout(resolve, 1000));
-				}
-			}
+		// 				socket.on('close', reject);
+		// 				socket.on('error', reject);
+		// 			});
+		// 			break;
+		// 		}
+		// 		catch (e) {
+		// 			await new Promise(resolve => setTimeout(resolve, 1000));
+		// 		}
+		// 	}
 
-			if (!socket) {
-				const address = this._commonArgs.address || 'localhost';
-				throw new Error(`Cannot launch connect (${address}:${this._commonArgs.port}).`);
-				return;
-			}
+		// 	if (!socket) {
+		// 		const address = this._commonArgs.address || 'localhost';
+		// 		throw new Error(`Cannot launch connect (${address}:${this._commonArgs.port}).`);
+		// 		return;
+		// 	}
 
-			this.onSocket(socket);
-		}
+		// 	this.onSocket(socket);
+		// }
 	}
 
-	private _captureOutput(process: CP.ChildProcess) {
-		process.stdout.on('data', (data: string) => {
-			this.sendEvent(new OutputEvent(data.toString(), 'stdout'));
-		});
-		process.stderr.on('data', (data: string) => {
-			this.sendEvent(new OutputEvent(data.toString(), 'stderr'));
-		});
-	}
+	// private _captureOutput(process: CP.ChildProcess) {
+	// 	process.stdout.on('data', (data: string) => {
+	// 		this.sendEvent(new OutputEvent(data.toString(), 'stdout'));
+	// 	});
+	// 	process.stderr.on('data', (data: string) => {
+	// 		this.sendEvent(new OutputEvent(data.toString(), 'stderr'));
+	// 	});
+	// }
 
 	async getArguments(): Promise<SourcemapArguments> {
 		await this._argsReady;
@@ -393,7 +409,7 @@ export class QuickJSDebugSession extends SourcemapSession {
 
 	public async logTrace(message: string) {
 		await this._argsReady;
-		if (this._commonArgs.trace)
+		// if (this._commonArgs.trace)
 			this.log(message);
 	}
 
@@ -419,7 +435,7 @@ export class QuickJSDebugSession extends SourcemapSession {
 		}
 	}
 	private async closeSockets() {
-		for (var thread of this._threads.values()) {
+		for (let thread of this._threads.values()) {
 			thread.destroy()
 		}
 		this._threads.clear()
@@ -472,7 +488,7 @@ export class QuickJSDebugSession extends SourcemapSession {
 		// map the new breakpoints for a file, and mapped files that get touched.
 		const bps = args.breakpoints || [];
 		const mappedBreakpoints: MappedPosition[] = [];
-		for (var bp of bps) {
+		for (let bp of bps) {
 			const mapped = await this.translateFileLocationToRemote({
 				source: args.source.path,
 				column: bp.column || 0,
@@ -504,7 +520,7 @@ export class QuickJSDebugSession extends SourcemapSession {
 
 		this._stopOnException = args.filters.length > 0;
 
-		for (var thread of this._threads.keys()) {
+		for (let thread of this._threads.keys()) {
 			this.sendThreadMessage(thread, {
 				type: 'stopOnException',
 				stopOnException: this._stopOnException,
@@ -525,7 +541,7 @@ export class QuickJSDebugSession extends SourcemapSession {
 
 		const stackFrames: StackFrame[] = [];
 		for (const { id, name, filename, line, column } of body) {
-			var mappedId = id + thread;
+			let mappedId = id + thread;
 			this._stackFrames.set(mappedId, thread);
 
 			try {
@@ -563,7 +579,7 @@ export class QuickJSDebugSession extends SourcemapSession {
 		const body = await this.sendThreadRequest(thread, response, args);
 		const scopes = body.map(({ name, reference, expensive }) => {
 			// todo: use counter mapping
-			var mappedReference = reference + thread;
+			let mappedReference = reference + thread;
 			this._variables.set(mappedReference, thread);
 			return new Scope(name, mappedReference, expensive);
 		});
@@ -597,7 +613,7 @@ export class QuickJSDebugSession extends SourcemapSession {
 	}
 
 	private sendThreadMessage(thread: number, envelope: any) {
-		var socket = this._threads.get(thread);
+		let socket = this._threads.get(thread);
 		if (!socket) {
 			this.logTrace(`socket not found for thread: ${thread.toString(16)}`);
 			return;
@@ -605,31 +621,31 @@ export class QuickJSDebugSession extends SourcemapSession {
 
 		this.logTrace(`sent ${thread}: ${JSON.stringify(envelope)}`)
 
-		var json = JSON.stringify(envelope);
+		let json = JSON.stringify(envelope);
 
-		var jsonBuffer = Buffer.from(json);
+		let jsonBuffer = Buffer.from(json);
 		// length prefix is 8 hex followed by newline = 012345678\n
 		// not efficient, but protocol is then human readable.
 		// json = 1 line json + new line
-		var messageLength = jsonBuffer.byteLength + 1;
-		var length = '00000000' + messageLength.toString(16) + '\n';
+		let messageLength = jsonBuffer.byteLength + 1;
+		let length = '00000000' + messageLength.toString(16) + '\n';
 		length = length.substr(length.length - 9);
-		var lengthBuffer = Buffer.from(length);
-		var newline = Buffer.from('\n');
-		var buffer = Buffer.concat([lengthBuffer, jsonBuffer, newline]);
+		let lengthBuffer = Buffer.from(length);
+		let newline = Buffer.from('\n');
+		let buffer = Buffer.concat([lengthBuffer, jsonBuffer, newline]);
 		socket.write(buffer);
 	}
 
 	private sendThreadRequest(thread: number, response: DebugProtocol.Response, args: any): Promise<any> {
 		return new Promise((resolve, reject) => {
-			var request_seq = response.request_seq;
+			let request_seq = response.request_seq;
 			// todo: don't actually need to cache this. can send across wire.
 			this._requests.set(request_seq, {
 				resolve,
 				reject,
 			});
 
-			var envelope = {
+			let envelope = {
 				type: 'request',
 				request: {
 					request_seq,
@@ -667,7 +683,7 @@ export class QuickJSDebugSession extends SourcemapSession {
 			this.sendErrorResponse(response, 2030, 'scopesRequest: frameId not specified');
 			return;
 		}
-		var thread = this._stackFrames.get(args.frameId);
+		let thread = this._stackFrames.get(args.frameId);
 		if (!thread) {
 			this.sendErrorResponse(response, 2030, 'scopesRequest: thread not found');
 			return;
@@ -694,14 +710,14 @@ export class QuickJSDebugSession extends SourcemapSession {
 			this.sendErrorResponse(response, 2030, 'completionsRequest: frameId not specified');
 			return;
 		}
-		var thread = this._stackFrames.get(args.frameId);
+		let thread = this._stackFrames.get(args.frameId);
 		if (!thread) {
 			this.sendErrorResponse(response, 2030, 'completionsRequest: thread not found');
 			return;
 		}
 		args.frameId -= thread;
 
-		var expression = args.text.substr(0, args.text.length - 1);
+		let expression = args.text.substr(0, args.text.length - 1);
 		if (!expression) {
 			this.sendErrorResponse(response, 2032, "no completion available for empty string")
 			return;
@@ -713,7 +729,7 @@ export class QuickJSDebugSession extends SourcemapSession {
 		}
 		response.command = 'evaluate';
 
-		var body = await this.sendThreadRequest(thread, response, evaluateArgs);
+		let body = await this.sendThreadRequest(thread, response, evaluateArgs);
 		if (!body.variablesReference) {
 			this.sendErrorResponse(response, 2032, "no completion available for expression");
 			return;
