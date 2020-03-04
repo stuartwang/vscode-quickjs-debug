@@ -122,12 +122,14 @@ export class QuickJSDebugSession extends SourcemapSession {
 		// response.body.supportsBreakpointLocationsRequest = true;
 
 		this.sendResponse(response);
-		// this.sendEvent(new InitializedEvent());
+		this.sendEvent(new InitializedEvent());//VSCODE收到返回后，执行setbreakpoint
 	}
 
+	// 处理debugger发来的事件消息
 	private handleEvent(thread: number, event: any) {
 		if (event.type === 'StoppedEvent') {
-			if (event.reason !== 'entry')
+			// stopOnEntry = true
+			// if (event.reason !== 'entry')
 			this.sendEvent(new StoppedEvent(event.reason, thread));
 		}
 		else if (event.type === 'terminated') {
@@ -135,6 +137,7 @@ export class QuickJSDebugSession extends SourcemapSession {
 		}
 	}
 
+	// 处理准备发给debugger的消息
 	private handleResponse(json: any) {
 		let request_seq: number = json.request_seq;
 		let pending = this._requests.get(request_seq);
@@ -188,6 +191,7 @@ export class QuickJSDebugSession extends SourcemapSession {
 			this.logTrace(`received ${thread}: ${JSON.stringify(json)}`)
 			// the very first message must include the thread id.
 			if (!thread) {
+				// thread == 0 (收到初始化消息)
 				thread = json.event.thread;
 				this._threads.set(thread, socket);
 				this.newSession(thread);
