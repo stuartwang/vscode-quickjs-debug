@@ -129,8 +129,9 @@ export class QuickJSDebugSession extends SourcemapSession {
 	private handleEvent(thread: number, event: any) {
 		if (event.type === 'StoppedEvent') {
 			// stopOnEntry = true
-			// if (event.reason !== 'entry')
-			this.sendEvent(new StoppedEvent(event.reason, thread));
+			if (event.reason !== 'entry'){
+				this.sendEvent(new StoppedEvent(event.reason, thread));
+			}
 		}
 		else if (event.type === 'terminated') {
 			this.onThreadDead(thread, 'program terminated');
@@ -217,6 +218,10 @@ export class QuickJSDebugSession extends SourcemapSession {
 		socket.pipe(parser as any);
 		socket.on('error', cleanup);
 		socket.on('close', cleanup);
+		socket.on('connect', ()=> {
+			// send init data
+			this.logTrace('socket connect')
+		});
 	}
 
 	protected disconnectRequest(response: DebugProtocol.DisconnectResponse, args: DebugProtocol.DisconnectArguments, request?: DebugProtocol.Request): void {
